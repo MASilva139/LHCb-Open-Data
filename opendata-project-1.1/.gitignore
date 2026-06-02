@@ -54,8 +54,8 @@ coverage.xml
 docs/_build/
 
 # PyBuilder
-target/
+# target/
 
 .DS_Store
-.ipynb_checkpoints
+# .ipynb_checkpoints
 # *.root
