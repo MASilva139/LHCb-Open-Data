@@ -57,5 +57,5 @@ docs/_build/
 target/
 
 .DS_Store
-# .ipynb_checkpoints
-# *.root
+.ipynb_checkpoints
+*.root
