@@ -5,6 +5,7 @@ import pandas as pd
 import uproot
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.colors as mcolors
 from scipy import stats
 from scipy.optimize import curve_fit
 
@@ -83,6 +84,7 @@ class funcgeneral:
         # Versión ordenada: R0low ≤ R0high (Dalitz plot "plegado")
         df['R0low'] = df[['m2_12', 'm2_13']].min(axis=1)
         df['R0high'] = df[['m2_12', 'm2_13']].max(axis=1)
+        return df
 
     @staticmethod
     def compute_acp(Np: int, Nm: int) -> dict:
@@ -92,7 +94,8 @@ class funcgeneral:
                 'A': np.nan, 
                 'sigma': np.nan,
                 'significance': np.nan, 
-                'Np': 0, 'Nm': 0
+                'Np': 0, 
+                'Nm': 0
             }
         A = (Nm - Np)/total
         sigma = np.sqrt((1 - A**2)/total)
@@ -128,10 +131,9 @@ class models:
     def chebyshev2_pdf(x, c0, c1, c2):
         t = 2 * (x - MASS_MIN)/(MASS_MAX - MASS_MIN) - 1
         pdf = c0 + c1*t + c2*(2*t**2 - 1)
-        # Asegurar positividad
-        pdf = np.clip(pdf, 0, None)
-        norm = np.trapz(pdf, x)
-        return pdf/(norm + 1e-30)
+        pdf = np.clip(pdf, 0, None)     # Asegurar positividad
+        norm = np.trapezoid(pdf, x)
+        return pdf/(norm + 1e-30)# Asegurar positividad
 
     @staticmethod
     def gauss_pdf(x, mu, sigma):
@@ -173,16 +175,22 @@ class models:
             n_sig_idx = 0
         try:
             popt, pcov = curve_fit(
-                fn, centers, counts,
-                p0=p0, sigma=uncert, absolute_sigma=True,
-                bounds=(lo, hi), maxfev=300000
+                fn, 
+                centers, 
+                counts,
+                p0=p0, 
+                sigma=uncert, 
+                absolute_sigma=True,
+                bounds=(lo, hi), 
+                maxfev=300000
             )
         except RuntimeError as e:
             print(f'  [WARNING] Ajuste no convergió: {e}')
-            popt = p0; pcov = np.diag(np.ones(len(p0)))
+            popt = p0
+            pcov = np.diag(np.ones(len(p0)))
         expected = fn(centers, *popt)
         chi2 = np.sum(((counts - expected) / uncert)**2)
-        ndf  = len(counts) - len(popt)
+        ndf = len(counts) - len(popt)
         n_sig = popt[n_sig_idx]
         n_sig_err = np.sqrt(np.clip(pcov[n_sig_idx, n_sig_idx], 0, None))
         if verbose:
@@ -215,7 +223,7 @@ class models:
         right_band: tuple = (5400, 5500)
     ) -> dict:
         n_sig_region = len(df.query(f'{signal_window[0]} <= {mass_col} < {signal_window[1]}'))
-        n_left = len(df.query(f'{left_band[0]}  <= {mass_col} < {left_band[1]}'))
+        n_left = len(df.query(f'{left_band[0]} <= {mass_col} < {left_band[1]}'))
         n_right = len(df.query(f'{right_band[0]} <= {mass_col} < {right_band[1]}'))
         # Factor de escala: relación de anchos
         w_sig = signal_window[1] - signal_window[0]
@@ -275,14 +283,15 @@ class analisis:
         results_fit = {}
         for charge, label, ax in zip([1, -1], ['B⁺', 'B⁻'], axes):
             masses_arr = df.loc[df['B_Charge'] == charge, 'B_M'].values
-            print(f'  {label}: {len(masses_arr):,} candidatos en [{MASS_MIN},{MASS_MAX}] MeV/c²')
+            print(f'  {label}: {len(masses_arr):,} candidatos en [{MASS_MIN},{MASS_MAX}] [MeV/c²]')
             res = models.fit_mass(masses_arr, model=fit_model, verbose=True)
             results_fit[charge] = res
             x_dense = np.linspace(MASS_MIN, MASS_MAX, 1000)
-            ax.step(res['centers'], res['counts'], where='mid', color='steelblue', label='Datos', linewidth=1)
+            # ax.step(res['centers'], res['counts'], where='mid', color='steelblue', label='Datos', linewidth=1)
+            ax.step(res['centers'], res['counts'], where='mid', color='#000000', label='Datos', linewidth=1)
             ax.plot(x_dense, res['model_fn'](x_dense, *res['popt']), 'r-', linewidth=1.5, label='Ajuste total')
-            ax.axvline(res['popt'][1], color='green', linestyle='--', linewidth=1, label=f"μ = {res['popt'][1]:.1f} MeV")
-            ax.set_xlabel(r'$M_B$ (MeV/$c^2$)')
+            ax.axvline(res['popt'][1], color='green', linestyle='--', linewidth=1, label=f"μ = {res['popt'][1]:.1f} [MeV]")
+            ax.set_xlabel(r'$M_B$ [MeV/$c^2$]')
             ax.set_ylabel('Eventos / bin')
             ax.set_title(label)
             ax.legend(fontsize=8)
@@ -328,27 +337,63 @@ class analisis:
         Bp_sig = df_sig[df_sig['B_Charge'] ==  1]
         Bm_sig = df_sig[df_sig['B_Charge'] == -1]
         # Histogramas 2D para B⁺ y B⁻
-        BINS_D = 10
-        XMAX_D = df_sig['R0low'].quantile(0.98) if len(df_sig) > 0 else 10e6
-        YMAX_D = df_sig['R0high'].quantile(0.98) if len(df_sig) > 0 else 30e6
-        hBp, xb, yb = np.histogram2d(Bp_sig['R0low'], Bp_sig['R0high'], bins=BINS_D, range=[[0, XMAX_D], [0, YMAX_D]])
-        hBm, _, _ = np.histogram2d(Bm_sig['R0low'], Bm_sig['R0high'], bins=BINS_D, range=[[0, XMAX_D], [0, YMAX_D]])
+        BINS_D = 15
+        # XMAX_D = df_sig['R0low'].quantile(0.98) if len(df_sig) > 0 else 10e6
+        # YMAX_D = df_sig['R0high'].quantile(0.98) if len(df_sig) > 0 else 30e6
+        RANGE_X = [0.0, 15.0]   # [GeV²/c⁴]
+        RANGE_Y = [0.0, 30.0]   # [GeV²/c⁴]
+        hBp, xb, yb = np.histogram2d(
+            Bp_sig['R0low']/1e6, Bp_sig['R0high']/1e6, bins=BINS_D, range=[RANGE_X, RANGE_Y]
+        )
+        hBm, _, _ = np.histogram2d(
+            Bm_sig['R0low']/1e6, Bm_sig['R0high']/1e6, bins=BINS_D, range=[RANGE_X, RANGE_Y]
+        )
         with np.errstate(divide='ignore', invalid='ignore'):
             tot = hBp + hBm
-            A_map = np.where(tot > 0, (hBm - hBp) / tot, np.nan)
-            sA_map = np.where(tot > 0, np.sqrt((1 - A_map**2) / tot), np.nan)
-            S_map = np.where(sA_map > 0, A_map / sA_map, np.nan)
+            A_map = np.where(tot > 0, (hBm - hBp)/tot, np.nan)
+            sA_map = np.where(tot > 0, np.sqrt((1 - A_map**2)/tot), np.nan)
+            S_map = np.where(sA_map > 0, A_map/sA_map, np.nan)
         fig2, axes2 = plt.subplots(1, 3, figsize=(18, 5))
         fig2.suptitle(f'{channel_name} — Dalitz ordenado (charm veto={charm_veto})', fontsize=12, fontweight='bold')
-        ext = [xb[0]/1e6, xb[-1]/1e6, yb[0]/1e6, yb[-1]/1e6]
-        im0 = axes2[0].matshow(hBp.T, extent=ext, aspect='auto', origin='lower', cmap='Blues')
-        axes2[0].set_title('Dalitz B⁺')
-        axes2[0].xaxis.set_ticks_position('bottom')
-        plt.colorbar(im0, ax=axes2[0])
-        im1 = axes2[1].matshow(hBm.T, extent=ext, aspect='auto', origin='lower', cmap='Reds')
-        axes2[1].set_title('Dalitz B⁻')
-        axes2[1].xaxis.set_ticks_position('bottom')
-        plt.colorbar(im1, ax=axes2[1])
+        dalitz_cmap = plt.get_cmap('RdBu_r').copy()
+        dalitz_cmap.set_bad('#000000')
+        # Histograma 2D
+        ## -------- B+
+        _, _, _, im0 = axes2[0].hist2d(
+            Bp_sig['R0low']  / 1e6,
+            Bp_sig['R0high'] / 1e6,
+            bins=BINS_D, 
+            range=[RANGE_X, RANGE_Y],
+            # cmap='RdBu_r', 
+            cmap=dalitz_cmap,
+            norm=mcolors.PowerNorm(gamma=0.5),
+            cmin=1
+        )
+        axes2[0].set_title(r'Dalitz $B^{+}$')
+        plt.colorbar(im0, ax=axes2[0], label='Eventos por bin')
+        ## -------- B-
+        _, _, _, im1 = axes2[1].hist2d(
+            Bm_sig['R0low']  / 1e6,
+            Bm_sig['R0high'] / 1e6,
+            bins=BINS_D, 
+            range=[RANGE_X, RANGE_Y],
+            # cmap='RdBu_r', 
+            cmap=dalitz_cmap,
+            norm=mcolors.PowerNorm(gamma=0.5),
+            cmin=1
+        )
+        axes2[1].set_title(r'Dalitz $B^{-}$')
+        plt.colorbar(im1, ax=axes2[1], label='Eventos por bin')
+        # ext = [xb[0]/1e6, xb[-1]/1e6, yb[0]/1e6, yb[-1]/1e6]
+        ext = [xb[0], xb[-1], yb[0], yb[-1]]
+        # im0 = axes2[0].matshow(hBp.T, extent=ext, aspect='auto', origin='lower', cmap='Blues')
+        # axes2[0].set_title('Dalitz B⁺')
+        # axes2[0].xaxis.set_ticks_position('bottom')
+        # plt.colorbar(im0, ax=axes2[0])
+        # im1 = axes2[1].matshow(hBm.T, extent=ext, aspect='auto', origin='lower', cmap='Reds')
+        # axes2[1].set_title('Dalitz B⁻')
+        # axes2[1].xaxis.set_ticks_position('bottom')
+        # plt.colorbar(im1, ax=axes2[1])
         im2 = axes2[2].matshow(
             S_map.T, 
             extent=ext, 
@@ -358,12 +403,13 @@ class analisis:
             vmin=-5, 
             vmax=5
         )
-        axes2[2].set_title('Significancia A/σ_A')
+        axes2[2].set_title('Significancia A/$σ_{A}$')
         axes2[2].xaxis.set_ticks_position('bottom')
+        axes2[2].set_facecolor('#000000')
         plt.colorbar(im2, ax=axes2[2], label='σ')
         for ax in axes2:
-            ax.set_xlabel(r'$m^2(KK)_{Low}\,[\times 10^6\,\mathrm{MeV}^2/c^4]$')
-            ax.set_ylabel(r'$m^2(KK)_{High}\,[\times 10^6\,\mathrm{MeV}^2/c^4]$')
+            ax.set_xlabel(r'$m^2(KK)_{Low}\,[\mathrm{GeV}^2/c^4]$')
+            ax.set_ylabel(r'$m^2(KK)_{High}\,[\mathrm{GeV}^2/c^4]$')
         plt.tight_layout()
         plt.savefig(f'GChanels/{safe_name}_dalitz.png', dpi=150, bbox_inches='tight')
         plt.show()
