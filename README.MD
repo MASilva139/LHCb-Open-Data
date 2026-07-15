@@ -1,4 +1,16 @@
-# Hackaton 2024
+## Origen del material
+Este repositorio toma como base material educativo del proyecto LHCb Open Data y lo adapta para uso didáctico. El objetivo es facilitar el análisis de datos abiertos de LHCb en entornos locales para
+- Windows, sin requerir de ROOT, utilizando `uproot`, `pandas`, `numpy`, `matplotlib` y `scipy`.
+- Ubuntu, empleando ROOT, utilizando `pyroot`.
+
+El material se organiza en:
+1. **[01_estudiante](01_estudiante)**: notebooks para completar durante la práctica.
+2. **[02_resuelto](02_resuelto)**: notebooks con las soluciones completas.
+3. **[03_modularizacion](03_modularizacion)**: ejercicio para reorganizar el análisis en archivos `.py`.
+
+El proyecto original de LHCb Open Data está publicado bajo licencia GPL-2.0.
+
+<!-- # Hackaton 2024
 El presente repositorio desarrolla los archivos Jupyter del Hackaton 2024, véase el [repositorio original](https://github.com/matchuf/PWF_Gt-Hn-CR_LHCb_open-data).
 
 Los notebooks implementados para google colab (LHCb_Open_Data_Project_PWF_whitout-root.ipynb), alternativa para no usar conda y root, se desarrollaron de manera nativa en Windows. Además se realizó una versión para `conda+root` para sistema operativo `Linux`.
@@ -24,4 +36,4 @@ os.chdir("/content/drive/MyDrive/work/opendata-project-1.1")
 
 # Check that you are in the correct path
 !ls
-```
+``` -->
