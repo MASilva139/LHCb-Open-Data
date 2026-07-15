@@ -529,7 +529,7 @@ class analisis:
             s = 0.3,
             color = 'red',
             alpha = 0.45,
-            rasterized = True
+            rasterized = True,
         )
         axes3[0].set_title(r'Diagrama de Dalitz')
         axes3[0].set_xlabel(r"$m_{12}^{2}$ [GeV$^2/c^4$]")
