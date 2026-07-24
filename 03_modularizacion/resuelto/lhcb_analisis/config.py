@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[3]  # Ubicación en la raiz
 DATA_DIR = ROOT_DIR / 'Data'
 # OUTPUT_DIR = ROOT_DIR / 'GChannels'
-OUTPUT_DIR = Path.cwd() / 'GChannels'
+OUTPUT_DIR = Path.cwd() / 'assets/img_channels'
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # Masa invariante [MeV/c²]

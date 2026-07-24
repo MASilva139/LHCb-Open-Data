@@ -315,13 +315,12 @@ def sideband_background_estimate(
         'scale': scale
     }
 
-# Pendiete de terminar ---
 def compare_mass_models(
     masses_array,
-    models: list[str] | None = None, # U+007C: |, U+2223: ∣
+    models: list[str] | tuple[str, ...] | None = None, # U+007C: |, U+2223: ∣
     verbose: bool = True
 ) -> dict:
-    if models in None:
+    if models is None:
         models = [
             'gauss_exp',
             'gauss_cheb',
@@ -332,5 +331,67 @@ def compare_mass_models(
     for model in models:
         if verbose:
             print(f'\n--- Ajustando modelo: {model} ---')
-        results[model] = fit_mass(masses_array, model= model, verbose=verbose)
+        try:
+            result = fit_mass(masses_array, model= model, verbose=verbose)
+            result['status'] = 'ok'
+            results[model] = result
+        except Exception as e:
+            print(f'[ERROR] Falló el modelo {model}: {e}')
+            results[model] = {
+                'model': model,
+                'status': 'error',
+                'error': str(e),
+                'n_signal': np.nan,
+                'n_signal_error': np.nan,
+                'chi2': np.nan,
+                'ndf': np.nan,
+                'converged': False
+            }
     return results
+
+def sumarize_model_comparison(comparison_results: dict) -> pd.DataFrame:
+    rows = []
+    for model, result in comparison_results.items():
+        chi2 = result.get('chi2', np.nan)
+        ndf = result.get('chi2', np.nan)
+        if (np.isfinite(chi2) and np.isfinite(ndf) and ndf != 0):
+            chi2_ndf = chi2/ndf
+        else:
+            chi2_ndf = np.nan
+        rows.append({
+            'modelo': model,
+            'estado': result.get('status', 'ok'),
+            'convergio': result.get('converged', False),
+            'n_signal': result.get('n_signal', np.nan),
+            'n_signal_error': result.get('n_signal_error', np.nan),
+            'chi2': chi2,
+            'ndf': ndf,
+            'chi2_ndf': chi2_ndf
+        })
+    return pd.DataFrame(rows)
+
+def compare_acp_model(comparison_plus: dict, comparison_minus: dict) -> pd.DataFrame:
+    rows = []
+    common_models = (set(comparison_plus.keys()) & set(comparison_minus.keys()))
+    for model in common_models:
+        result_plus = comparison_plus[model]
+        result_minus = comparison_minus[model]
+        n_plus = result_plus.get('n_signal', np.nan)
+        n_minus = result_minus.get('n_signal', np.nan)
+        if (np.isfinite(n_plus) and np.isfinite(n_minus) and (n_plus + n_minus) > 0):
+            acp = (n_minus - n_plus)/(n_minus + n_plus)
+            sigma_acp = np.sqrt((1 - acp**2)/(n_minus + n_plus))
+            significance = (acp/sigma_acp if sigma_acp > 0 else np.nan)
+        else:
+            acp = np.nan
+            sigma_acp = np.nan
+            significance = np.nan
+        rows.append({
+            'modelo': model,
+            'N_plus': n_plus,
+            'N_minus': n_minus,
+            'A_CP': acp,
+            'sigma_A_CP': sigma_acp,
+            'significancia': significance
+        })
+    return pd.DataFrame(rows)
